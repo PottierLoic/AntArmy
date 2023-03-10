@@ -2,40 +2,48 @@ import gg
 import gx
 import rand
 import math
+import time
 
 // Windows size
-const screen_width = 800
-const screen_height = 600
+const screen_width = 500
+const screen_height = 500
 
 // Amounts used to construct simlation
 const ant_amount = 1000
-const food_amount = 2000
+const food_amount = 1
 
 //  spawn points of ants and food
-const ant_spawn = [200, 200]
+const ant_spawn = [screen_width/2, screen_height/2]
 const food_spawn = [[100, 100], [500, 500], [700, 300], [100, 230]]
 const spawn_range = 20
 
 const ant_color = gx.red
 const food_color = gx.green
+const trace_color = [gx.blue, gx.yellow]
 const bg_color = gx.black
 
-const ant_size = 2
-const food_size = 2
+const trace_spawn_delay = 100
+const trace_duration = 100
 
-pub struct Ant {
+
+const ant_size = 3
+const food_size = 3
+const trace_size = 2
+
+struct Ant {
 	mut:
 		x f64
 		y f64
 		food bool
 		direction f64
 		color gg.Color = ant_color
+		last_spawn time.StopWatch
 }
 
 fn (mut ant Ant) update () {
 	ant.x += math.cos(ant.direction*math.pi)
 	ant.y += math.sin(ant.direction*math.pi)
-	ant.direction += rand.f64_in_range(-0.2, 0.2) or {0}
+	ant.direction += rand.f64_in_range(-0.1, 0.1) or {0}
 
 	if ant.x < 0 { ant.x = 0.0 
 				   ant.direction=math.pi-ant.direction }
@@ -50,7 +58,8 @@ fn (mut ant Ant) update () {
 fn new_ant() Ant {
 	return Ant{x: ant_spawn[0] 
 			   y: ant_spawn[1]
-			   direction : rand.f64n(2) or { 0 }}
+			   direction : rand.f64n(2) or { 0 }
+			   last_spawn: time.new_stopwatch()}
 }
 
 struct Food {
@@ -66,16 +75,44 @@ fn new_food() Food {
 				y: rand.int_in_range(rand_spawn[1]-spawn_range, rand_spawn[1]+spawn_range) or {rand_spawn[1]}} 
 }
 
+struct Trace {
+	mut:
+		x f64
+		y f64
+		found bool
+		color gg.Color
+		spawn_time time.StopWatch
+}
+
+fn new_trace(pos_x f64, pos_y f64, f bool) Trace {
+	return Trace {x: pos_x
+				  y: pos_y
+				  found: f
+				  color: trace_color[int(f)]
+				  spawn_time: time.new_stopwatch()}
+}
+
 struct Sim {
 	mut:
 		ants []Ant
 		foods []Food
+		traces []Trace
 }
 
 fn (mut sim Sim) update() {
 	for mut ant in sim.ants {
 		ant.update()
+		if ant.last_spawn.elapsed().milliseconds() > trace_spawn_delay {
+			sim.traces << new_trace(ant.x, ant.y, ant.food)
+			ant.last_spawn.restart()
+		}
 	}
+	for i in 0..sim.traces.len {
+		if sim.traces[i].spawn_time.elapsed().milliseconds() > trace_duration {
+			sim.traces.delete(i)
+		}
+	}
+
 }
 
 fn new_sim() Sim {
@@ -101,7 +138,10 @@ fn print_app(app &App) {
 		app.gg.draw_circle_filled(int(ant.x), int(ant.y), ant_size, ant.color)
 	}
 	for food in app.sim.foods {
-		app.gg.draw_circle_filled(food.x, food.y, food_size, food_color)
+		app.gg.draw_circle_filled(food.x, food.y, food_size, food.color)
+	}
+	for trace in app.sim.traces {
+		app.gg.draw_circle_filled(int(trace.x), int(trace.y), trace_size, trace.color)
 	}
 }
 
